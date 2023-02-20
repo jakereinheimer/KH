@@ -1,0 +1,70 @@
+<comment>
+problem   = Kelvin-Helmholtz instability
+reference = Lecoanet et al., MNRAS 455, 4274-4288, 2016
+configure = --prob=kh -hdf5
+
+<job>
+problem_id = kh-shear-lecoanet  # problem ID: basename of output filenames
+
+<output1>
+file_type  = hdf5      # HDF5 data dump
+variable   = prim      # variables to be output
+dt         = 0.1       # time increment between outputs
+
+<time>
+cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1   # cycle limit
+tlim       = 10.0      # time limit
+integrator  = vl2      # time integration algorithm
+xorder      = 2        # order of spatial reconstruction
+ncycle_out  = 100     # interval for stdout summary info
+dt_diagnostics = -1      # interval (in STS stages) for stdout extra dt info
+
+<mesh>
+nx1        = 256         # Number of zones in X1-direction
+x1min      = -1.0        # minimum value of X1
+x1max      = 1.0         # maximum value of X1
+ix1_bc     = periodic    # inner-X1 boundary flag
+ox1_bc     = periodic    # inner-X1 boundary flag
+
+nx2        = 896         # Number of zones in X2-direction
+x2min      = -3.5        # minimum value of X2
+x2max      = 3.5         # maximum value of X2
+ix2_bc     = user    # inner-X2 boundary flag
+ox2_bc     = user    # inner-X2 boundary flag
+
+nx3        = 1           # Number of zones in X3-direction
+x3min      = -0.5        # minimum value of X3
+x3max      = 0.5         # maximum value of X3
+ix3_bc     = periodic    # inner-X3 boundary flag
+ox3_bc     = periodic    # inner-X3 boundary flag
+
+<meshblock>
+nx1        = 128
+nx2        = 64
+
+<hydro>
+iso_sound_speed = 1.0
+gamma           = 1.6666667    # gamma = C_p/C_v
+
+<problem>                # Default parameter values correspond to Re=10^5
+iprob  = 1
+rho_0  = 1.0
+pgas_0 = 10.0 
+density_contrast = 100.0
+vel_shear = 8.1649658 
+smoothing_thickness = 0.05
+smoothing_thickness_vel = 0.2
+vel_pert = 0.04
+lambda_pert = 1.0
+noisy_IC = true
+z_top = 0.5
+z_bot = -0.5
+ConstantShearInflowOuterX2_on = true
+ConstantShearInflowInnerX2_on = true
+SpitzerViscosity_on = false
+nu_iso = 0
+visc_factor = 2.581988897e-3 
+T_cond_max = 0.0
+Cooling_on = true
+cooling_factor = 0.1837117 
