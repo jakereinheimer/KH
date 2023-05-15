@@ -44,16 +44,10 @@ void Cooling(MeshBlock *pmb, const Real time, const Real dt,
              AthenaArray<Real> &cons_scalar);
 
 // User Defined Boundary Conditions
-void ConstantShearInflowOuterX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
+void ConstantShearInflowOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
                     FaceField &b, Real time, Real dt,
                     int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void ConstantShearInflowInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-                    FaceField &b, Real time, Real dt,
-                    int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void ConstantShearInflowOuterX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-                    FaceField &b, Real time, Real dt,
-                    int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void ConstantShearInflowInnerX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
+void ConstantShearInflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
                     FaceField &b, Real time, Real dt,
                     int il, int iu, int jl, int ju, int kl, int ku, int ngh);
 
@@ -65,7 +59,7 @@ namespace {
   Real vel_shear, vel_pert;
   Real smoothing_thickness, smoothing_thickness_vel;
   Real z_max, z_min;
-  Real z_top, z_bot;
+  Real radius;
   Real density_contrast;
   Real lambda_pert;
   Real T_cond_max;
@@ -108,29 +102,19 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   }
   vel_pert       = pin->GetReal("problem", "vel_pert");
   lambda_pert         = pin->GetReal("problem", "lambda_pert");
-  z_top               = pin->GetReal("problem", "z_top");
-  z_bot               = pin->GetReal("problem", "z_bot");
+  radius               = pin->GetReal("problem", "radius");
 
   // Boundary Conditions -----------------------------------------------------------------
-  bool ConstantShearInflowOuterX2_on = pin->GetOrAddBoolean("problem", "ConstantShearInflowOuterX2_on", false);
-  bool ConstantShearInflowInnerX2_on = pin->GetOrAddBoolean("problem", "ConstantShearInflowInnerX2_on", false);
-  bool ConstantShearInflowOuterX3_on = pin->GetOrAddBoolean("problem", "ConstantShearInflowOuterX3_on", false);
-  bool ConstantShearInflowInnerX3_on = pin->GetOrAddBoolean("problem", "ConstantShearInflowInnerX3_on", false);
+  bool ConstantShearInflowOuterX1_on = pin->GetOrAddBoolean("problem", "ConstantShearInflowOuterX1_on", false);
+  bool ConstantShearInflowInnerX1_on = pin->GetOrAddBoolean("problem", "ConstantShearInflowInnerX1_on", false);
 
-  // Enroll 3D boundary condition
-  if(mesh_bcs[inner_x3] == GetBoundaryFlag("user")) {
-    if (ConstantShearInflowInnerX3_on) EnrollUserBoundaryFunction(BoundaryFace::inner_x3, ConstantShearInflowInnerX3);
-  }
-  if(mesh_bcs[outer_x3] == GetBoundaryFlag("user")) {
-    if (ConstantShearInflowOuterX3_on) EnrollUserBoundaryFunction(BoundaryFace::outer_x3, ConstantShearInflowOuterX3);
-  }
 
   // Enroll 2D boundary condition
-  if(mesh_bcs[BoundaryFace::inner_x2] == GetBoundaryFlag("user")) {
-    if (ConstantShearInflowInnerX2_on) EnrollUserBoundaryFunction(BoundaryFace::inner_x2, ConstantShearInflowInnerX2);
+  if(mesh_bcs[BoundaryFace::inner_x1] == GetBoundaryFlag("user")) {
+    if (ConstantShearInflowInnerX1_on) EnrollUserBoundaryFunction(BoundaryFace::inner_x1, ConstantShearInflowInnerX1);
   }
-  if(mesh_bcs[BoundaryFace::outer_x2] == GetBoundaryFlag("user")) {
-    if (ConstantShearInflowOuterX2_on) EnrollUserBoundaryFunction(BoundaryFace::outer_x2, ConstantShearInflowOuterX2);
+  if(mesh_bcs[BoundaryFace::outer_x1] == GetBoundaryFlag("user")) {
+    if (ConstantShearInflowOuterX1_on) EnrollUserBoundaryFunction(BoundaryFace::outer_x1, ConstantShearInflowOuterX1);
   }
 
   // Read Microphysics -----------------------------------------------------------------
@@ -199,37 +183,51 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
           Real x = pcoord->x1v(i);
           // 3D
           if (block_size.nx3 > 1) {
-            Real r = std::sqrt(SQR(z) + SQR(x));
-            phydro->w(IDN,k,j,i) = rho_0 * (1.0 + (density_contrast-1.0) * 0.5 * std::tanh((r-z_top)/smoothing_thickness) ) ;
-            phydro->w(IPR,k,j,i) = pgas_0;
-            phydro->w(IVX,k,j,i) = vel_shear * ( 0.5 - 0.5 * std::tanh((r-z_top)/smoothing_thickness) );
-            phydro->w(IVY,k,j,i) = 0.0;
-            phydro->w(IVZ,k,j,i) = 0.0;
-            // Perturbations
-            if (lambda_pert > 0.0){
-              phydro->w(IVZ,k,j,i) = vel_pert;
-              phydro->w(IVZ,k,j,i) *= std::exp(-SQR((r-z_top)/smoothing_thickness_vel));
-              phydro->w(IVZ,k,j,i) *= std::sin(2*PI*x/lambda_pert) * std::sin(2*PI*y/lambda_pert) ;
-            }
-          }
-          // 2D
-          else if (block_size.nx2 > 1) {
-            phydro->u(IDN,k,j,i) = rho_0 * (1.0 + (density_contrast-1.0) * 0.5 * ( std::tanh((y-z_bot)/smoothing_thickness) - std::tanh((y-z_top)/smoothing_thickness) ) );
-            phydro->u(IM1,k,j,i) = phydro->u(IDN,k,j,i) * vel_shear * ( 0.5 - 0.5 * ( std::tanh((y-z_bot)/smoothing_thickness) - std::tanh((y-z_top)/smoothing_thickness) ));
+            Real r = std::sqrt(SQR(z) + SQR(y));
+            Real density= rho_0 * ((density_contrast/2) + 0.5 + (density_contrast-1.0) * 0.5 * -std::tanh((r-radius)/smoothing_thickness) ) ;
+
+            phydro->u(IDN,k,j,i) = density;
+            phydro->u(IEN,k,j,i) = pgas_0/(gamma_adi-1);
+            phydro->u(IM1,k,j,i) = density * vel_shear * -1 * (std::tanh((r-radius)/smoothing_thickness) );
             phydro->u(IM2,k,j,i) = 0.0;
+            phydro->u(IM3,k,j,i) = 0.0;
+
             // Perturbations
-            if (lambda_pert > 0.0){
-              phydro->u(IM2,k,j,i) = phydro->u(IDN,k,j,i) * vel_pert;
-              phydro->u(IM2,k,j,i) *= (std::exp(-SQR((y-z_bot)/smoothing_thickness_vel)) + std::exp(-SQR((y-z_top)/smoothing_thickness_vel)));
-              phydro->u(IM2,k,j,i) *=  std::sin(2*PI*x/lambda_pert);
-            } // lambda_pert if
+            // A full circular velocity pertubation
+            if (lambda_pert >= 0.0){
+              if ((density>1.0) && (density<density_contrast)){ // Adding perturbations only too areas between the densities
+
+                Real mag = density * vel_pert ;// is the magnitude of the pertibation
+                mag *= std::exp(-1*SQR(r-radius)/(smoothing_thickness));// is the gaussian to center the perturbation
+
+                if (lambda_pert > 0.0){
+                mag *= std::sin(2*PI*x/lambda_pert) ; //multiplies both components by a sin to have it at oscilate along x axis
+                }
+
+                if (lambda_pert == 0.0) {
+                  Real pert_loc= pin->GetOrAddInteger("problem","pert_loc",-2.5);
+                  Real pert_width= pin->GetOrAddInteger("problem","pert_width",smoothing_thickness);
+
+                  mag *= std::exp(-1*(SQR(x+(-1*pert_loc))/pert_width)); //multiplies both components by a sin to have it at oscilate along x axis
+                } // end second if
+
+                Real theta = std::atan(y/z); // is the angle the current point is on for calculating the impact for each dimension
+                phydro->u(IM3,k,j,i) = mag * std::cos(theta); //z component magnitude with cos of theta
+                phydro->u(IM2,k,j,i) = mag * std::sin(theta); //y component magnitude with sin of theta
+            } //end density if statement
+            } // end pert
+
+            // Add random noise if noise wants to be added
             if (noisy_IC){
               phydro->u(IM2,k,j,i) *= ran2(&iseed); 
+              phydro->u(IM3,k,j,i) *= ran2(&iseed); 
             }
+
+            // sets pressure based on velocity
             if (NON_BAROTROPIC_EOS) {
               phydro->u(IEN,k,j,i) = pgas_0/(gamma_adi-1.0) + 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i)))/phydro->u(IDN,k,j,i);
             }
-          } // 2D if
+          }
         } // i for
       } // j for
     } // k for
@@ -304,27 +302,38 @@ void Cooling(MeshBlock *pmb, const Real time, const Real dt,
 //                          int is, int ie, int js, int je, int ks, int ke, int ngh)
 //  \brief ConstantShearInflow boundary conditions, inner x2 boundary
 
-void ConstantShearInflowInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
+void ConstantShearInflowInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
                     FaceField &b, Real time, Real dt,
                     int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
   // copy hydro variables into ghost zones
     for (int k=kl; k<=ku; k++) {
-    for (int j=1; j<=ngh; j++) {
-      for (int i=il; i<=iu; i++) {
+    Real z = pco->x3v(k);
+    for (int j=jl; j<=ju; j++) {
+      Real y = pco->x2v(j);
+      for (int i=1; i<=ngh; i++) {
+        //Real x = pco->x1v(i);
+        Real r = std::sqrt(SQR(z) + SQR(y));
+        Real density= rho_0 * ((density_contrast/2) + 0.5 + (density_contrast-1.0) * 0.5 * -std::tanh((r-radius)/smoothing_thickness) ) ;
+
         for (int n=0; n<(NHYDRO); n++) {
-        Real z = pco->x2v(jl-j);
-        prim(n,k,jl-j,i) = prim(n,k,jl,i);
+        prim(n,k,j,il-i) = prim(n,k,j,il);
         if ( n == IPR ){
-          prim(IPR,k,jl-j,i) = pgas_0;
+          prim(IPR,k,j,il-i) = pgas_0;
         } 
         if ( n == IDN ){
-          prim(IDN,k,jl-j,i) = rho_0 * (1.0 + (density_contrast-1.0) * 0.5 * ( std::tanh((z-z_bot)/smoothing_thickness) - std::tanh((z-z_top)/smoothing_thickness) ) );
+          prim(IDN,k,j,il-i) = density;
         } 
         if ( n == IVX ){
-          prim(IVX,k,jl-j,i) = vel_shear * ( 0.5 - 0.5 * ( std::tanh((z-z_bot)/smoothing_thickness) - std::tanh((z-z_top)/smoothing_thickness) ));
-        } 
-      }
-    }}
+          prim(IVX,k,j,il-i) = vel_shear * -1 * (std::tanh((r-radius)/smoothing_thickness) );
+        }
+        }
+      if (r>radius){
+          prim(IDN,k,j,il-i) = 1e-5;
+          prim(IVX,k,j,il-i) = 1e-5;
+          prim(IPR,k,j,il-i) = 1e-5;
+          }
+    }
+    }
   }
 
   // copy face-centered magnetic fields into ghost zones
@@ -360,27 +369,37 @@ void ConstantShearInflowInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Re
 //                          int is, int ie, int js, int je, int ks, int ke, int ngh)
 //  \brief ConstantShearInflow boundary conditions, outer x2 boundary
 
-void ConstantShearInflowOuterX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
+void ConstantShearInflowOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
                     FaceField &b, Real time, Real dt,
                     int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
   // copy hydro variables into ghost zones
     for (int k=kl; k<=ku; k++) {
-    for (int j=1; j<=ngh; j++) {
+      Real z=pco->x3v(k);
+    for (int j=jl; j<=ju; j++) {
+      Real y=pco->x2v(j);
 #pragma omp simd
-      for (int i=il; i<=iu; i++) {
+      for (int i=1; i<=ngh; i++) {
+        //Real x = pco->x3v(i);
+        Real r = std::sqrt(SQR(z) + SQR(y));
+        Real density= rho_0 * ((density_contrast/2) + 0.5 + (density_contrast-1.0) * 0.5 * -std::tanh((r-radius)/smoothing_thickness) ) ;
+
         for (int n=0; n<(NHYDRO); n++) {
-        Real z = pco->x2v(ju+j);
-        prim(n,k,ju+j,i) = prim(n,k,ju,i);
+        prim(n,k,j,iu+i) = prim(n,k,j,iu);
         if ( n == IPR ){
-          prim(IPR,k,ju+j,i) = pgas_0;
+          prim(IPR,k,j,iu+i) = pgas_0;
         } 
         if ( n == IDN ){
-          prim(IDN,k,ju+j,i) = rho_0 * (1.0 + (density_contrast-1.0) * 0.5 * ( std::tanh((z-z_bot)/smoothing_thickness) - std::tanh((z-z_top)/smoothing_thickness) ) );
+          prim(IDN,k,j,iu+i) = density;
         } 
         if ( n == IVX ){
-          prim(IVX,k,ju+j,i) = vel_shear * ( 0.5 - 0.5 * ( std::tanh((z-z_bot)/smoothing_thickness) - std::tanh((z-z_top)/smoothing_thickness) ));
-        } 
-      }
+          prim(IVX,k,j,iu+i) = vel_shear * -1 * (std::tanh((r-radius)/smoothing_thickness) );
+        }
+        }
+      if (r<radius){
+          prim(IDN,k,j,iu+i) = 1e-5;
+          prim(IVX,k,j,iu+i) = 1e-5;
+          prim(IPR,k,j,iu+i) = 1e-5;
+          } 
     }}
   }
 
@@ -408,118 +427,6 @@ void ConstantShearInflowOuterX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Re
     }}
   }
 
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ConstantShearInflowInnerX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-//                          FaceField &b, Real time, Real dt,
-//                          int is, int ie, int js, int je, int ks, int ke, int ngh)
-//  \brief ConstantShearInflow boundary conditions, inner x3 boundary
-
-void ConstantShearInflowInnerX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-                    FaceField &b, Real time, Real dt,
-                    int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
-  // copy hydro variables into ghost zones
-  for (int n=0; n<(NHYDRO); n++) {
-    for (int k=1; k<=ngh; k++) {
-    for (int j=jl; j<=ju; j++) {
-      for (int i=il; i<=iu; i++) {
-        Real z = pco->x3v(kl-k);
-        prim(n,kl-k,j,i) = prim(n,kl,j,i);
-        if ( n == IPR ){
-          prim(IPR,kl-k,j,i) = pgas_0;
-        } 
-        if ( n == IDN ){
-          prim(IDN,kl-k,j,i) = rho_0 * (1.0 + (density_contrast-1.0) * 0.5 * ( std::tanh((z-z_bot)/smoothing_thickness) - std::tanh((z-z_top)/smoothing_thickness) ) );
-        } 
-        if ( n == IVX ){
-          prim(IVX,kl-k,j,i) = vel_shear * ( 0.5 - 0.5 * ( std::tanh((z-z_bot)/smoothing_thickness) - std::tanh((z-z_top)/smoothing_thickness) ));
-        } 
-      }
-    }}
-  }
-
-  // copy face-centered magnetic fields into ghost zones
-  if (MAGNETIC_FIELDS_ENABLED) {
-    for (int k=1; k<=ngh; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu+1; ++i) {
-        b.x1f((kl-k),j,i) = b.x1f(kl,j,i);
-      }
-    }}
-
-    for (int k=1; k<=ngh; ++k) {
-    for (int j=jl; j<=ju+1; ++j) {
-      for (int i=il; i<=iu; ++i) {
-        b.x2f((kl-k),j,i) = b.x2f(kl,j,i);
-      }
-    }}
-
-    for (int k=1; k<=ngh; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu; ++i) {
-        b.x3f((kl-k),j,i) = b.x3f(kl,j,i);
-      }
-    }}
-  }
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ConstantShearInflowOuterX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-//                          FaceField &b, Real time, Real dt,
-//                          int is, int ie, int js, int je, int ks, int ke, int ngh)
-//  \brief ConstantShearInflow boundary conditions, outer x3 boundary
-
-void ConstantShearInflowOuterX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-                    FaceField &b, Real time, Real dt,
-                    int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
-  // copy hydro variables into ghost zones
-  for (int n=0; n<(NHYDRO); n++) {
-    for (int k=1; k<=ngh; k++) {
-    for (int j=jl; j<=ju; j++) {
-      for (int i=il; i<=iu; i++) {
-        Real z = pco->x3v(ku+k);
-        prim(n,ku+k,j,i) = prim(n,ku,j,i);
-        if ( n == IPR ){
-          prim(IPR,ku+k,j,i) = pgas_0;
-        } 
-        if ( n == IDN ){
-          prim(IDN,ku+k,j,i) = rho_0 * (1.0 + (density_contrast-1.0) * 0.5 * ( std::tanh((z-z_bot)/smoothing_thickness) - std::tanh((z-z_top)/smoothing_thickness) ) );
-        } 
-        if ( n == IVX ){
-          prim(IVX,ku+k,j,i) = vel_shear * ( 0.5 - 0.5 * ( std::tanh((z-z_bot)/smoothing_thickness) - std::tanh((z-z_top)/smoothing_thickness) ));
-        } 
-      }
-    }}
-  }
-
-  // copy face-centered magnetic fields into ghost zones
-  if (MAGNETIC_FIELDS_ENABLED) {
-    for (int k=1; k<=ngh; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu+1; ++i) {
-        b.x1f((ku+k  ),j,i) = b.x1f((ku  ),j,i);
-      }
-    }}
-
-    for (int k=1; k<=ngh; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu; ++i) {
-        b.x2f((ku+k  ),j,i) = b.x2f((ku  ),j,i);
-      }
-    }}
-
-    for (int k=1; k<=ngh; ++k) {
-    for (int j=jl; j<=ju; ++j) {
-      for (int i=il; i<=iu; ++i) {
-        b.x3f((ku+k+1),j,i) = b.x3f((ku+1),j,i);
-      }
-    }}
-  }
 
   return;
 }
