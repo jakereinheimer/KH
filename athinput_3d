@@ -1,0 +1,76 @@
+<comment>
+problem   = Kelvin-Helmholtz instability
+reference = Lecoanet et al., MNRAS 455, 4274-4288, 2016
+configure = --prob=kh -hdf5
+
+<job>
+problem_id = kh-custom  # problem ID: basename of output filenames
+restart_flag    = 0 # 0 for new job, 1 for restart
+restart_file    = res000aa # name of restart file
+
+<output1>
+file_type  = hdf5      # HDF5 data dump
+variable   = prim      # variables to be output
+dt         = 0.1       # time increment between outputs
+
+<output2>
+file_type = rst # restart file
+dt      = 2.0 # time increment between outputs
+
+<time>
+cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1   # cycle limit
+tlim       = 10.0      # time limit
+integrator  = vl2      # time integration algorithm
+xorder      = 2        # order of spatial reconstruction
+ncycle_out  = 500     # interval for stdout summary info
+dt_diagnostics = -1      # interval (in STS stages) for stdout extra dt info
+
+<mesh>
+nx1        = 256         # Number of zones in X1-direction
+x1min      = -6.0        # minimum value of X1
+x1max      = 6.0         # maximum value of X1
+ix1_bc     = user    # inner-X1 boundary flag
+ox1_bc     = user   # inner-X1 boundary flag
+
+nx2        = 128         # Number of zones in X2-direction
+x2min      = -3.0        # minimum value of X2
+x2max      = 3.0         # maximum value of X2
+ix2_bc     = periodic    # inner-X2 boundary flag
+ox2_bc     = periodic    # inner-X2 boundary flag
+
+nx3        = 128         # Number of zones in X3-direction
+x3min      = -3.0        # minimum value of X3
+x3max      = 3.0         # maximum value of X3
+ix3_bc     = periodic    # inner-X3 boundary flag
+ox3_bc     = periodic    # inner-X3 boundary flag
+
+<meshblock>
+nx1        = 32
+nx2        = 32
+nx3        = 32
+
+<hydro>
+iso_sound_speed = 1.0
+gamma           = 1.6666667    # gamma = C_p/C_v
+
+<problem>
+iprob=1                # Default parameter values correspond to Re=10^5
+rho_0  = 1.0
+pgas_0 = 10.0 
+density_contrast = 100.0 #100 is the physical contrast between n_Halpha (0.1 cm^-3) and n_ICM (10^-3)
+vel_shear = 4.08 
+smoothing_thickness = 0.05
+smoothing_thickness_vel = 0.2
+vel_pert = 0.4
+lambda_pert = 12 #per Chandra proposal, wavelength perturbation equals to 
+#noisy_IC=false
+radius=0.5
+ConstantShearInflowOuterX1_on = true
+ConstantShearInflowInnerX1_on = true
+SpitzerViscosity_on = false # try ConstantViscosity_on
+nu_iso = 0.0
+visc_factor = 2.581988897e-3 
+T_cond_max = 0.0
+Cooling_on = false
+cooling_factor = 0.1837117 
